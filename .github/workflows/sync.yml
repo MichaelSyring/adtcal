@@ -1,0 +1,24 @@
+name: Sync GoMotion ICS Feed
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Runs automatically every 5 minutes
+  workflow_dispatch:      # Allows you to trigger a manual sync anytime
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download GoMotion ICS Feed
+        run: |
+          curl -L "https://www.gomotionapp.com/team/agsa/controller/calendar/ics/Calendar.ics?key=b4RTUo8iDxMCQL8mbuhOiQ%3D%3D&itemTypes=APPOINTMENT&myEventsOnly=true&eventsWithWarings=false&startDate=1790830800000&endDate=1853989200000" -o calendar.ics
+
+      - name: Commit and Push if Changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add calendar.ics
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-sync GoMotion calendar feed [skip ci]" && git push)
