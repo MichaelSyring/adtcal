@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AGSA / Cage Availability Schedule</title>
+  <title>Facility Cage Availability Schedule</title>
   <style>
     :root {
       --bg-dark: #0f172a;
@@ -61,7 +61,7 @@
     .feed-pill {
       font-size: 0.75rem;
       font-weight: 600;
-      padding: 3px 8px;
+      padding: 3px 9px;
       border-radius: 999px;
       background: rgba(34, 197, 94, 0.15);
       color: var(--ok-color);
@@ -89,7 +89,7 @@
     .status-group {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       flex-wrap: wrap;
     }
 
@@ -104,6 +104,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      cursor: pointer;
     }
 
     .refresh-badge {
@@ -168,7 +169,7 @@
       padding: 12px 10px;
       text-align: center;
       font-weight: 700;
-      font-size: 1.1rem;
+      font-size: 1.08rem;
       border-right: 1px solid var(--border-color);
       color: var(--text-main);
       background: linear-gradient(180deg, rgba(249, 115, 22, 0.14) 0%, rgba(30, 41, 59, 0) 100%);
@@ -273,7 +274,7 @@
 
     .event-title {
       font-weight: 700;
-      font-size: 0.96rem;
+      font-size: 0.95rem;
       line-height: 1.2;
       margin-bottom: 2px;
     }
@@ -328,7 +329,7 @@
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      width: 520px;
+      width: 560px;
       max-width: 94vw;
       max-height: 88vh;
       overflow-y: auto;
@@ -337,7 +338,7 @@
     }
 
     .modal h2 {
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       font-size: 1.25rem;
     }
 
@@ -394,6 +395,17 @@
       color: #fff;
     }
 
+    .diag-box {
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
     .upcoming-list {
       list-style: none;
       margin-top: 10px;
@@ -403,10 +415,21 @@
     .upcoming-list li {
       padding: 10px 4px;
       border-bottom: 1px solid var(--border-color);
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       display: flex;
       justify-content: space-between;
+      align-items: center;
       gap: 10px;
+    }
+
+    .col-tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(249, 115, 22, 0.2);
+      color: #fdba74;
+      margin-left: 6px;
     }
   </style>
 </head>
@@ -416,14 +439,14 @@
   <header>
     <div class="title-group">
       <h1>
-        <span id="facilityTitle">Cage Schedule & Availability</span>
+        <span id="facilityTitle">AGSA / ADT Cage Schedule</span>
         <span class="feed-pill loading" id="feedStatusPill">Syncing GoMotion...</span>
       </h1>
       <p id="windowSubtitle">Loading time window...</p>
     </div>
 
     <div class="status-group">
-      <div class="next-up-banner" id="nextUpBanner" title="Click All Upcoming to inspect feed">
+      <div class="next-up-banner" id="nextUpBanner" title="Click to inspect upcoming feed events">
         Checking upcoming reservations...
       </div>
       <div class="refresh-badge">
@@ -464,15 +487,15 @@
       <div class="form-row">
         <label for="inputColumnMode">Column Layout Mode</label>
         <select id="inputColumnMode">
-          <option value="smart">Smart Match (Use Cage List + General Column if Unmatched)</option>
-          <option value="auto">Auto-Detect Columns from GoMotion Location/Summary</option>
+          <option value="smart">Show All 4 Cages (+ General Column if Unmatched)</option>
+          <option value="cagesOnly">Show Only Configured Cage Columns (Unmatched go to Cage 1)</option>
           <option value="single">Single Combined Schedule Column</option>
         </select>
       </div>
       <div class="form-row">
         <label for="inputCages">Cage / Resource Columns (Comma-separated)</label>
-        <input type="text" id="inputCages" placeholder="Cage 1, Cage 2, Pitching Lane" />
-        <div class="form-help">Events mentioning a column name in their Title, Location, or Description are placed into that column automatically.</div>
+        <input type="text" id="inputCages" placeholder="Cage 1, Cage 2, Cage 3, Cage 4" />
+        <div class="form-help">Events mentioning a cage number or name in their Title, Location, or Description are placed into that column automatically.</div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="resetSettingsBtn">Reset to Code Defaults</button>
@@ -486,9 +509,7 @@
   <div class="modal-backdrop" id="upcomingModal">
     <div class="modal">
       <h2>GoMotion Feed Inspector (Next 25 Events)</h2>
-      <p style="font-size: 0.84rem; color: var(--text-muted);">
-        Verifies live connection to your AGSA GoMotion calendar feed even when the current hour is quiet.
-      </p>
+      <div class="diag-box" id="diagBox">Checking feed connection...</div>
       <ul class="upcoming-list" id="upcomingList"></ul>
       <div class="modal-actions">
         <button class="btn btn-primary" id="forceRefreshBtn">Refresh Feed Now</button>
@@ -502,19 +523,23 @@
      * 1. EASY CONFIGURATION BLOCK
      * Edit hoursBefore, hoursAfter, refreshMinutes, or cages right here!
      * You can also override these anytime via URL parameters:
-     * Example: https://yourname.github.io/cages/?before=2&after=5&refresh=5
+     * Example: https://michaelsyring.github.io/adtcal/?before=2&after=5&refresh=5
      ********************************************************************/
+    const STORAGE_KEY = "agsaCageKioskConfig_v2";
+
     const DEFAULT_CONFIG = {
-      facilityName: "AGSA Facility & Cage Schedule",
+      facilityName: "AGSA / ADT Cage Schedule",
       hoursBefore: 2,          // Show 2 hours prior to current hour
       hoursAfter: 5,           // Show 5 hours after current hour
       refreshMinutes: 5,       // Auto-refresh feed every 5 minutes
-      columnMode: "smart",     // "smart", "auto", or "single"
+      columnMode: "smart",     // "smart", "cagesOnly", or "single"
       cages: [
         "Cage 1",
-        "Cage 2"
+        "Cage 2",
+        "Cage 3",
+        "Cage 4"
       ],
-      icsUrl: "https://www.gomotionapp.com/team/agsa/controller/calendar/ics/Calendar.ics?key=b4RTUo8iDxMCQL8mbuhOiQ%3D%3D&&itemTypes=APPOINTMENT&myEventsOnly=true&eventsWithWarings=false&startDate=1790830800000&endDate=1853989200000"
+      icsUrl: "https://www.gomotionapp.com/team/agsa/controller/calendar/ics/Calendar.ics?key=b4RTUo8iDxMCQL8mbuhOiQ%3D%3D&itemTypes=APPOINTMENT&myEventsOnly=true&eventsWithWarings=false&startDate=1790830800000&endDate=1853989200000"
     };
 
     /********************************************************************
@@ -523,10 +548,12 @@
     let config = loadConfig();
     let refreshSecondsRemaining = config.refreshMinutes * 60;
     let rawEvents = [];
+    let lastSyncSource = "None";
     let lastSyncTime = null;
+    let syncLog = [];
 
     function loadConfig() {
-      const saved = JSON.parse(localStorage.getItem("agsaCageKioskConfig") || "{}");
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
       const params = new URLSearchParams(window.location.search);
 
       return {
@@ -535,52 +562,136 @@
         hoursAfter: parseInt(params.get("after") ?? saved.hoursAfter ?? DEFAULT_CONFIG.hoursAfter, 10),
         refreshMinutes: parseInt(params.get("refresh") ?? saved.refreshMinutes ?? DEFAULT_CONFIG.refreshMinutes, 10),
         columnMode: params.get("mode") || saved.columnMode || DEFAULT_CONFIG.columnMode,
-        cages: saved.cages || DEFAULT_CONFIG.cages,
+        cages: Array.isArray(saved.cages) && saved.cages.length > 0 ? saved.cages : DEFAULT_CONFIG.cages,
         icsUrl: DEFAULT_CONFIG.icsUrl
       };
     }
 
     /********************************************************************
-     * 3. GOMOTION .ICS FETCHER WITH MULTI-PROXY CORS FAILOVER
+     * 3. GOMOTION .ICS FETCHER WITH ATTACHMENT / BASE64 UNWRAPPING
      ********************************************************************/
+    function decodeBase64Utf8(base64Str) {
+      const cleaned = base64Str.replace(/\s/g, "");
+      const binaryStr = atob(cleaned);
+      const bytes = Uint8Array.from(binaryStr, ch => ch.charCodeAt(0));
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    function extractIcsText(rawResponseText) {
+      if (!rawResponseText) return null;
+
+      // Direct ICS text
+      if (rawResponseText.includes("BEGIN:VCALENDAR")) {
+        return rawResponseText;
+      }
+
+      // JSON wrapper from allorigins.win/get
+      try {
+        const json = JSON.parse(rawResponseText);
+        if (json && typeof json.contents === "string") {
+          if (json.contents.includes("BEGIN:VCALENDAR")) {
+            return json.contents;
+          }
+          if (json.contents.startsWith("data:") && json.contents.includes(";base64,")) {
+            const b64 = json.contents.split(";base64,")[1];
+            const decoded = decodeBase64Utf8(b64);
+            if (decoded.includes("BEGIN:VCALENDAR")) {
+              return decoded;
+            }
+          }
+        }
+      } catch (e) {
+        // Not JSON
+      }
+
+      return null;
+    }
+
+    async function fetchWithTimeout(url, timeoutMs = 12000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { cache: "no-store", signal: controller.signal });
+        clearTimeout(timer);
+        return res;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
+    }
+
     async function fetchIcsFeed() {
       const pill = document.getElementById("feedStatusPill");
       pill.textContent = "Syncing GoMotion...";
       pill.className = "feed-pill loading";
+      syncLog = [];
 
-      const targetUrl = config.icsUrl;
+      // Normalize any accidental double-ampersands in the GoMotion URL
+      const cleanTargetUrl = config.icsUrl.replace(/&&+/g, "&");
+      const encodedUrl = encodeURIComponent(cleanTargetUrl);
 
-      // Try direct fetch first, then reliable CORS proxies for GitHub Pages compatibility
-      const candidateUrls = [
-        targetUrl,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+      // Ordered list of fetch strategies (Local mirror -> AllOrigins JSON/Base64 -> CORSProxy -> Cors.lol -> CodeTabs)
+      const strategies = [
+        {
+          name: "Local Repo Mirror (./calendar.ics)",
+          url: `./calendar.ics?t=${Date.now()}`
+        },
+        {
+          name: "AllOrigins JSON/Attachment Wrapper",
+          url: `https://api.allorigins.win/get?disableCache=true&url=${encodedUrl}`
+        },
+        {
+          name: "CorsProxy.io Direct Stream",
+          url: `https://corsproxy.io/?${encodedUrl}`
+        },
+        {
+          name: "Cors.lol Stream",
+          url: `https://api.cors.lol/?url=${encodedUrl}`
+        },
+        {
+          name: "AllOrigins Raw Stream",
+          url: `https://api.allorigins.win/raw?url=${encodedUrl}`
+        },
+        {
+          name: "CodeTabs Proxy",
+          url: `https://api.codetabs.com/v1/proxy?quest=${encodedUrl}`
+        }
       ];
 
-      for (const url of candidateUrls) {
+      for (const strategy of strategies) {
         try {
-          const response = await fetch(url, { cache: "no-store" });
-          if (!response.ok) continue;
-          const text = await response.text();
+          const response = await fetchWithTimeout(strategy.url, 12000);
+          if (!response.ok) {
+            syncLog.push(`${strategy.name}: HTTP ${response.status}`);
+            continue;
+          }
 
-          if (text && text.includes("BEGIN:VCALENDAR")) {
-            rawEvents = parseIcsCalendar(text);
+          const rawText = await response.text();
+          const icsText = extractIcsText(rawText);
+
+          if (icsText && icsText.includes("BEGIN:VCALENDAR")) {
+            rawEvents = parseIcsCalendar(icsText);
+            lastSyncSource = strategy.name;
             lastSyncTime = new Date();
+            syncLog.push(`${strategy.name}: Success (${rawEvents.length} events)`);
+
             pill.textContent = `Live • ${rawEvents.length} Events Loaded`;
             pill.className = "feed-pill";
             renderSchedule();
             updateUpcomingInspector();
             return;
+          } else {
+            syncLog.push(`${strategy.name}: Non-ICS payload returned`);
           }
         } catch (err) {
-          // Proceed to next proxy candidate
+          syncLog.push(`${strategy.name}: ${err.name === "AbortError" ? "Timeout" : "Blocked/Error"}`);
         }
       }
 
-      pill.textContent = "Sync Retry Pending (Using Cached Data)";
+      pill.textContent = "Sync Retry Pending (Click All Upcoming for Info)";
       pill.className = "feed-pill error";
       renderSchedule();
+      updateUpcomingInspector();
     }
 
     /********************************************************************
@@ -600,11 +711,10 @@
         .trim();
     }
 
-    function parseIcsDate(value, paramsStr) {
+    function parseIcsDate(value) {
       if (!value) return null;
       const clean = value.trim();
 
-      // All-day date: YYYYMMDD
       if (/^\d{8}$/.test(clean)) {
         const y = parseInt(clean.slice(0, 4), 10);
         const m = parseInt(clean.slice(4, 6), 10) - 1;
@@ -612,7 +722,6 @@
         return new Date(y, m, d, 0, 0, 0);
       }
 
-      // DateTime: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ
       const match = clean.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/);
       if (!match) return null;
 
@@ -621,7 +730,6 @@
         return new Date(Date.UTC(+year, +month - 1, +day, +hour, +min, +sec));
       }
 
-      // Local / Central Time (America/Chicago)
       return new Date(+year, +month - 1, +day, +hour, +min, +sec);
     }
 
@@ -648,9 +756,8 @@
 
           const propPart = line.slice(0, colonIdx);
           const valPart = line.slice(colonIdx + 1);
-          const [propName, ...paramParts] = propPart.split(";");
+          const [propName] = propPart.split(";");
           const upperProp = propName.toUpperCase();
-          const paramsStr = paramParts.join(";");
 
           if (upperProp === "SUMMARY") {
             current.summary = unescapeIcsText(valPart);
@@ -659,14 +766,14 @@
           } else if (upperProp === "DESCRIPTION") {
             current.description = unescapeIcsText(valPart);
           } else if (upperProp === "DTSTART") {
-            current.dtstart = parseIcsDate(valPart, paramsStr);
+            current.dtstart = parseIcsDate(valPart);
           } else if (upperProp === "DTEND") {
-            current.dtend = parseIcsDate(valPart, paramsStr);
+            current.dtend = parseIcsDate(valPart);
           } else if (upperProp === "RRULE") {
             current.rrule = valPart.trim();
           } else if (upperProp === "EXDATE") {
             valPart.split(",").forEach(ex => {
-              const dt = parseIcsDate(ex, paramsStr);
+              const dt = parseIcsDate(ex);
               if (dt) current.exdates.push(dt.getTime());
             });
           }
@@ -679,9 +786,8 @@
     function expandEventsForNearTerm(events) {
       const expanded = [];
       const now = new Date();
-      // Expand recurring events between 7 days ago and 60 days ahead
       const rangeStart = new Date(now.getTime() - 7 * 86400000);
-      const rangeEnd = new Date(now.getTime() + 60 * 86400000);
+      const rangeEnd = new Date(now.getTime() + 90 * 86400000);
       const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
       events.forEach(ev => {
@@ -698,7 +804,6 @@
           return;
         }
 
-        // Parse simple RRULE (FREQ=DAILY or FREQ=WEEKLY)
         const parts = {};
         ev.rrule.split(";").forEach(kv => {
           const [k, v] = kv.split("=");
@@ -752,30 +857,29 @@
 
       const haystack = `${ev.summary} ${ev.location} ${ev.description}`.toLowerCase();
 
-      // Check configured cage names first (e.g., "Cage 1", "Cage 2")
+      // 1. Direct match against configured cage names (e.g., "Cage 1", "Cage 2", "Cage 3", "Cage 4")
       for (const cageName of configuredCages) {
         if (haystack.includes(cageName.toLowerCase())) {
           return cageName;
         }
       }
 
-      // Check shorthand patterns like "C1", "#1", "Lane 1"
+      // 2. Shorthand patterns like "Cage #3", "Lane 3", "Tunnel 3", "C3"
       for (let i = 0; i < configuredCages.length; i++) {
         const num = i + 1;
-        const regex = new RegExp(`\\b(cage|lane|station|tunnel)\\s*#?0?${num}\\b`, "i");
+        const regex = new RegExp(`\\b(cage|lane|station|tunnel|c)\\s*#?0?${num}\\b`, "i");
         if (regex.test(haystack)) {
           return configuredCages[i];
         }
       }
 
-      if (config.columnMode === "auto" && ev.location) {
-        return ev.location;
+      if (config.columnMode === "cagesOnly") {
+        return configuredCages[0] || "Cage 1";
       }
 
       return "Facility / General";
     }
 
-    // Side-by-side layout helper when two events overlap in the same column
     function computeOverlapGeometry(columnEvents) {
       const sorted = [...columnEvents].sort((a, b) => a.start - b.start || b.end - a.end);
       const groups = [];
@@ -844,7 +948,6 @@
       const now = new Date();
       document.getElementById("facilityTitle").textContent = config.facilityName;
 
-      // Rolling time window calculation
       const windowStart = new Date(
         now.getFullYear(),
         now.getMonth(),
@@ -859,10 +962,8 @@
       document.getElementById("windowSubtitle").textContent =
         `Showing ${formatHourLabel(windowStart)} to ${formatHourLabel(windowEnd)} (${config.hoursBefore}h before / ${config.hoursAfter}h after) • Auto-refreshes every ${config.refreshMinutes} min`;
 
-      // Update "Next Up" banner in top bar
       updateNextUpBanner(now);
 
-      // Filter events overlapping our rolling time window
       const activeEvents = rawEvents
         .filter(ev => ev.end > windowStart && ev.start < windowEnd)
         .map((ev, idx) => ({
@@ -871,22 +972,18 @@
           colorIndex: (idx % 4) + 1
         }));
 
-      // Determine active columns
+      // Always keep all configured cages (Cage 1, Cage 2, Cage 3, Cage 4) visible
       let columns = [];
       if (config.columnMode === "single") {
         columns = ["All Reservations"];
-      } else if (config.columnMode === "auto") {
-        const detected = [...new Set(activeEvents.map(e => e.column))];
-        columns = detected.length > 0 ? detected : config.cages;
       } else {
         columns = [...config.cages];
         const hasGeneral = activeEvents.some(e => e.column === "Facility / General");
-        if (hasGeneral && !columns.includes("Facility / General")) {
+        if (config.columnMode === "smart" && hasGeneral && !columns.includes("Facility / General")) {
           columns.push("Facility / General");
         }
       }
 
-      // Scale row height to fit screen cleanly
       const availableHeight = window.innerHeight - 130;
       const dynamicHourHeight = Math.max(55, Math.floor(availableHeight / totalHours));
       document.documentElement.style.setProperty("--hour-height", `${dynamicHourHeight}px`);
@@ -897,14 +994,12 @@
       gridHeaderEl.style.gridTemplateColumns = colTemplate;
       gridBodyEl.style.gridTemplateColumns = colTemplate;
 
-      // Header HTML
       let headerHTML = `<div class="time-col-header">TIME</div>`;
       columns.forEach(col => {
         headerHTML += `<div class="cage-col-header">${col}</div>`;
       });
       gridHeaderEl.innerHTML = headerHTML;
 
-      // Time Labels Column HTML
       let timeColHTML = `<div class="time-column">`;
       for (let i = 0; i < totalHours; i++) {
         const slotDate = new Date(windowStart.getTime() + i * 3600000);
@@ -912,7 +1007,6 @@
       }
       timeColHTML += `</div>`;
 
-      // Cage Columns + Event Blocks HTML
       let cagesHTML = "";
       columns.forEach(colName => {
         cagesHTML += `<div class="cage-column">`;
@@ -936,7 +1030,6 @@
 
           const topPx = offsetHours * dynamicHourHeight;
           const heightPx = Math.max(28, durationHours * dynamicHourHeight - 3);
-
           const locBadge = ev.location ? ` • ${ev.location}` : "";
 
           cagesHTML += `
@@ -951,7 +1044,6 @@
         cagesHTML += `</div>`;
       });
 
-      // Red "NOW" Indicator Line
       const nowOffsetHours = (now - windowStart) / 3600000;
       const nowTopPx = nowOffsetHours * dynamicHourHeight;
       const nowLineHTML = `
@@ -967,7 +1059,9 @@
       const banner = document.getElementById("nextUpBanner");
       const upcoming = rawEvents.find(ev => ev.end > now);
       if (!upcoming) {
-        banner.textContent = "No upcoming reservations found in feed";
+        banner.textContent = rawEvents.length > 0
+          ? "No future events remaining in range"
+          : "No upcoming reservations loaded yet";
         return;
       }
 
@@ -980,8 +1074,17 @@
     }
 
     function updateUpcomingInspector() {
+      const diagBox = document.getElementById("diagBox");
       const listEl = document.getElementById("upcomingList");
       const now = new Date();
+
+      const timeLabel = lastSyncTime ? lastSyncTime.toLocaleTimeString() : "Never";
+      diagBox.innerHTML = `
+        <strong>Last Sync:</strong> ${timeLabel} via <em>${lastSyncSource}</em><br/>
+        <strong>Total Parsed Events in Feed:</strong> ${rawEvents.length}<br/>
+        <strong>Sync Attempts:</strong> ${syncLog.join(" → ") || "In progress..."}
+      `;
+
       const nextEvents = rawEvents.filter(ev => ev.end >= now).slice(0, 25);
 
       if (nextEvents.length === 0) {
@@ -994,9 +1097,13 @@
           const dayStr = ev.start.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
           const timeStr = `${formatTimeShort(ev.start)} – ${formatTimeShort(ev.end)}`;
           const loc = ev.location ? ` (${ev.location})` : "";
+          const assignedCol = assignCageColumn(ev, config.cages);
           return `
             <li>
-              <strong>${ev.summary}${loc}</strong>
+              <div>
+                <strong>${ev.summary}${loc}</strong>
+                <span class="col-tag">${assignedCol}</span>
+              </div>
               <span style="color: var(--text-muted); white-space: nowrap;">${dayStr} • ${timeStr}</span>
             </li>
           `;
@@ -1020,7 +1127,6 @@
         refreshSecondsRemaining = config.refreshMinutes * 60;
         fetchIcsFeed();
       } else if (now.getSeconds() === 0) {
-        // Advance the rolling window & red NOW line every minute on the minute
         renderSchedule();
       }
 
@@ -1060,14 +1166,14 @@
         .filter(Boolean);
       if (parsedCages.length > 0) config.cages = parsedCages;
 
-      localStorage.setItem("agsaCageKioskConfig", JSON.stringify(config));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
       refreshSecondsRemaining = config.refreshMinutes * 60;
       settingsModal.classList.remove("active");
       renderSchedule();
     });
 
     document.getElementById("resetSettingsBtn").addEventListener("click", () => {
-      localStorage.removeItem("agsaCageKioskConfig");
+      localStorage.removeItem(STORAGE_KEY);
       window.history.replaceState({}, document.title, window.location.pathname);
       config = loadConfig();
       refreshSecondsRemaining = config.refreshMinutes * 60;
