@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Facility Cage Schedule</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-slot-even: #1e293b;
+      --bg-slot-odd: #172033;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #f97316;
+      --now-line: #ef4444;
+      --avail-text: #22c55e;
+      --hour-height: 90px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header Bar */
+    header {
+      background-color: var(--bg-panel);
+      border-bottom: 2px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .title-group h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: var(--text-main);
+    }
+
+    .title-group p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .status-group {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .clock-display {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .refresh-badge {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .settings-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .settings-btn:hover {
+      color: var(--text-main);
+      border-color: var(--accent);
+    }
+
+    /* Calendar Grid Container */
+    .calendar-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Column Headers (Cages) */
+    .grid-header {
+      display: grid;
+      background-color: #0b1120;
+      border-bottom: 2px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .time-col-header {
+      padding: 14px 10px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-right: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+
+    .cage-col-header {
+      padding: 14px 10px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.15rem;
+      border-right: 1px solid var(--border-color);
+      color: var(--text-main);
+      background: linear-gradient(180deg, rgba(249,115,22,0.12) 0%, rgba(30,41,59,0) 100%);
+    }
+
+    /* Timeline Body */
+    .grid-body {
+      flex: 1;
+      position: relative;
+      overflow-y: auto;
+      display: grid;
+    }
+
+    .time-column {
+      border-right: 1px solid var(--border-color);
+      background-color: #0b1120;
+    }
+
+    .time-slot-label {
+      height: var(--hour-height);
+      border-bottom: 1px solid var(--border-color);
+      padding: 8px 10px;
+      text-align: right;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      position: relative;
+    }
+
+    .time-slot-label::after {
+      content: "";
+      position: absolute;
+      left: 60%;
+      right: 0;
+      top: 50%;
+      border-bottom: 1px dashed rgba(148, 163, 184, 0.2);
+    }
+
+    .cage-column {
+      position: relative;
+      border-right: 1px solid var(--border-color);
+    }
+
+    .hour-cell {
+      height: var(--hour-height);
+      border-bottom: 1px solid var(--border-color);
+      position: relative;
+    }
+
+    .hour-cell:nth-child(even) {
+      background-color: var(--bg-slot-even);
+    }
+
+    .hour-cell:nth-child(odd) {
+      background-color: var(--bg-slot-odd);
+    }
+
+    /* Half-hour dashed divider */
+    .hour-cell::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-bottom: 1px dashed rgba(148, 163, 184, 0.18);
+      pointer-events: none;
+    }
+
+    /* Available watermark */
+    .avail-watermark {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(34, 197, 94, 0.22);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    /* Reservation Blocks */
+    .event-block {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      border-radius: 6px;
+      padding: 8px 10px;
+      background-color: rgba(249, 115, 22, 0.9);
+      border-left: 5px solid #fff;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .event-block.team {
+      background-color: rgba(59, 130, 246, 0.9);
+    }
+
+    .event-block.individual {
+      background-color: rgba(16, 185, 129, 0.9);
+    }
+
+    .event-title {
+      font-weight: 700;
+      font-size: 1rem;
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    .event-time {
+      font-size: 0.8rem;
+      opacity: 0.9;
+      font-weight: 500;
+    }
+
+    /* Current Time Red Indicator Line */
+    .now-indicator {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background-color: var(--now-line);
+      z-index: 20;
+      pointer-events: none;
+      box-shadow: 0 0 10px var(--now-line);
+    }
+
+    .now-badge {
+      position: absolute;
+      left: 6px;
+      top: -11px;
+      background-color: var(--now-line);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Settings Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      width: 420px;
+      max-width: 92vw;
+      padding: 24px;
+      box-shadow: 0 20px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal h2 {
+      margin-bottom: 16px;
+      font-size: 1.3rem;
+    }
+
+    .form-row {
+      margin-bottom: 14px;
+    }
+
+    .form-row label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-row input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-dark);
+      color: var(--text-main);
+      font-size: 1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-size: 0.9rem;
+    }
+
+    .btn-secondary {
+      background: #334155;
+      color: var(--text-main);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header>
+    <div class="title-group">
+      <h1 id="facilityTitle">Batting Cage Availability</h1>
+      <p id="windowSubtitle">Showing -2 hrs to +5 hrs from current time</p>
+    </div>
+
+    <div class="status-group">
+      <div class="refresh-badge">
+        Next refresh in <strong id="refreshCountdown">5:00</strong>
+      </div>
+      <div class="clock-display" id="liveClock">--:-- --</div>
+      <button class="settings-btn" id="openSettingsBtn" title="Configure Time Window">
+        ⚙ Display Settings
+      </button>
+    </div>
+  </header>
+
+  <!-- SCHEDULE GRID -->
+  <div class="calendar-wrapper">
+    <div class="grid-header" id="gridHeader"></div>
+    <div class="grid-body" id="gridBody"></div>
+  </div>
+
+  <!-- ON-SCREEN SETTINGS MODAL -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal">
+      <h2>Display Window Settings</h2>
+      <div class="form-row">
+        <label for="inputBefore">Hours Shown BEFORE Current Time</label>
+        <input type="number" id="inputBefore" min="0" max="12" step="1" />
+      </div>
+      <div class="form-row">
+        <label for="inputAfter">Hours Shown AFTER Current Time</label>
+        <input type="number" id="inputAfter" min="1" max="24" step="1" />
+      </div>
+      <div class="form-row">
+        <label for="inputRefresh">Auto-Refresh Interval (Minutes)</label>
+        <input type="number" id="inputRefresh" min="1" max="60" step="1" />
+      </div>
+      <div class="form-row">
+        <label for="inputCages">Cages / Lanes (Comma-separated)</label>
+        <input type="text" id="inputCages" placeholder="Cage 1, Cage 2, Cage 3, Pitching Lane" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="resetSettingsBtn">Reset Defaults</button>
+        <button class="btn btn-secondary" id="closeSettingsBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveSettingsBtn">Save & Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /******************************************************************
+     * 1. EASY CONFIGURATION BLOCK
+     * Change these values directly in GitHub, OR override them anytime
+     * using the on-screen "Display Settings" button or URL parameters:
+     * Example URL: ?before=2&after=5&refresh=5
+     ******************************************************************/
+    const DEFAULT_CONFIG = {
+      facilityName: "Batting Cage Schedule & Availability",
+      hoursBefore: 2,          // Hours to display prior to current hour
+      hoursAfter: 5,           // Hours to display after current hour
+      refreshMinutes: 5,       // Auto-refresh interval in minutes
+      cages: [
+        "Cage 1",
+        "Cage 2",
+        "Cage 3",
+        "Cage 4"
+      ],
+      // Optional: Paste a published Google Sheet CSV URL or JSON endpoint here
+      externalDataUrl: ""
+    };
+
+    /******************************************************************
+     * 2. STATE & SETTINGS MANAGEMENT
+     ******************************************************************/
+    let config = loadConfiguration();
+    let refreshSecondsRemaining = config.refreshMinutes * 60;
+    let reservations = [];
+
+    function loadConfiguration() {
+      const saved = JSON.parse(localStorage.getItem("cageKioskConfig") || "{}");
+      const urlParams = new URLSearchParams(window.location.search);
+
+      return {
+        facilityName: DEFAULT_CONFIG.facilityName,
+        hoursBefore: parseInt(urlParams.get("before") ?? saved.hoursBefore ?? DEFAULT_CONFIG.hoursBefore, 10),
+        hoursAfter: parseInt(urlParams.get("after") ?? saved.hoursAfter ?? DEFAULT_CONFIG.hoursAfter, 10),
+        refreshMinutes: parseInt(urlParams.get("refresh") ?? saved.refreshMinutes ?? DEFAULT_CONFIG.refreshMinutes, 10),
+        cages: saved.cages || DEFAULT_CONFIG.cages,
+        externalDataUrl: DEFAULT_CONFIG.externalDataUrl
+      };
+    }
+
+    /******************************************************************
+     * 3. RESERVATION DATA FETCHER (DEMO + LIVE FETCH READY)
+     ******************************************************************/
+    async function fetchReservations() {
+      // If you connect a Google Sheet CSV or JSON feed in DEFAULT_CONFIG, fetch it here:
+      if (config.externalDataUrl) {
+        try {
+          const response = await fetch(config.externalDataUrl + "?t=" + Date.now());
+          const data = await response.json();
+          reservations = data;
+          renderSchedule();
+          return;
+        } catch (err) {
+          console.error("Failed to fetch external schedule, falling back to cached/demo data:", err);
+        }
+      }
+
+      // Sample dynamic reservations anchored around today's current hour so you can test immediately
+      const now = new Date();
+      const baseHour = now.getHours();
+
+      reservations = [
+        {
+          cage: config.cages[0] || "Cage 1",
+          title: "12U Team Hitting Practice",
+          startHourOffset: -1.5,
+          durationHours: 1.5,
+          type: "team"
+        },
+        {
+          cage: config.cages[0] || "Cage 1",
+          title: "Reserved - J. Miller",
+          startHourOffset: 1.0,
+          durationHours: 1.0,
+          type: "individual"
+        },
+        {
+          cage: config.cages[1] || "Cage 2",
+          title: "14U Team Practice",
+          startHourOffset: -0.5,
+          durationHours: 2.0,
+          type: "team"
+        },
+        {
+          cage: config.cages[2] || "Cage 3",
+          title: "Pitching Lesson - Coach Sarah",
+          startHourOffset: 0.0,
+          durationHours: 1.0,
+          type: "individual"
+        },
+        {
+          cage: config.cages[3] || "Cage 4",
+          title: "Open / Walk-In Cage",
+          startHourOffset: 2.0,
+          durationHours: 1.5,
+          type: "individual"
+        }
+      ].map(item => {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), baseHour, 0, 0);
+        start.setMinutes(start.getMinutes() + item.startHourOffset * 60);
+        const end = new Date(start.getTime() + item.durationHours * 3600000);
+        return {
+          cage: item.cage,
+          title: item.title,
+          start: start,
+          end: end,
+          type: item.type
+        };
+      });
+
+      renderSchedule();
+    }
+
+    /******************************************************************
+     * 4. ROLLING WINDOW & SCHEDULE GRID RENDERER
+     ******************************************************************/
+    function formatHourLabel(dateObj) {
+      let hours = dateObj.getHours();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      return `${hours}:00 ${ampm}`;
+    }
+
+    function formatTimeShort(dateObj) {
+      return dateObj.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function renderSchedule() {
+      const now = new Date();
+      document.getElementById("facilityTitle").textContent = config.facilityName;
+
+      // Calculate rolling start and end timestamps rounded to the hour
+      const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() - config.hoursBefore, 0, 0);
+      const totalHours = config.hoursBefore + config.hoursAfter;
+      const windowEnd = new Date(windowStart.getTime() + totalHours * 3600000);
+
+      document.getElementById("windowSubtitle").textContent =
+        `Showing ${formatHourLabel(windowStart)} to ${formatHourLabel(windowEnd)} (${config.hoursBefore}h before / ${config.hoursAfter}h after) • Auto-refreshes every ${config.refreshMinutes} min`;
+
+      // Adjust CSS hour height automatically so all requested hours fit cleanly on one screen
+      const gridBodyEl = document.getElementById("gridBody");
+      const availableHeight = window.innerHeight - 135;
+      const dynamicHourHeight = Math.max(58, Math.floor(availableHeight / totalHours));
+      document.documentElement.style.setProperty("--hour-height", `${dynamicHourHeight}px`);
+
+      // Build Grid Columns (110px Time Column + Equal Cage Columns)
+      const colTemplate = `110px repeat(${config.cages.length}, 1fr)`;
+      const gridHeaderEl = document.getElementById("gridHeader");
+      gridHeaderEl.style.gridTemplateColumns = colTemplate;
+      gridBodyEl.style.gridTemplateColumns = colTemplate;
+
+      // Render Header
+      let headerHTML = `<div class="time-col-header">TIME</div>`;
+      config.cages.forEach(cage => {
+        headerHTML += `<div class="cage-col-header">${cage}</div>`;
+      });
+      gridHeaderEl.innerHTML = headerHTML;
+
+      // Render Time Labels Column
+      let timeColHTML = `<div class="time-column">`;
+      for (let i = 0; i < totalHours; i++) {
+        const slotDate = new Date(windowStart.getTime() + i * 3600000);
+        timeColHTML += `<div class="time-slot-label">${formatHourLabel(slotDate)}</div>`;
+      }
+      timeColHTML += `</div>`;
+
+      // Render Each Cage Column & Events
+      let cagesHTML = "";
+      config.cages.forEach(cageName => {
+        cagesHTML += `<div class="cage-column">`;
+        for (let i = 0; i < totalHours; i++) {
+          cagesHTML += `
+            <div class="hour-cell">
+              <div class="avail-watermark">Available</div>
+            </div>`;
+        }
+
+        // Filter and position events for this cage within the rolling window
+        const cageEvents = reservations.filter(ev =>
+          ev.cage === cageName && ev.end > windowStart && ev.start < windowEnd
+        );
+
+        cageEvents.forEach(ev => {
+          const clampedStart = ev.start < windowStart ? windowStart : ev.start;
+          const clampedEnd = ev.end > windowEnd ? windowEnd : ev.end;
+
+          const offsetHours = (clampedStart - windowStart) / 3600000;
+          const durationHours = (clampedEnd - clampedStart) / 3600000;
+
+          const topPx = offsetHours * dynamicHourHeight;
+          const heightPx = Math.max(28, durationHours * dynamicHourHeight - 4);
+
+          cagesHTML += `
+            <div class="event-block ${ev.type || ''}" style="top: ${topPx}px; height: ${heightPx}px;">
+              <div class="event-title">${ev.title}</div>
+              <div class="event-time">${formatTimeShort(ev.start)} – ${formatTimeShort(ev.end)}</div>
+            </div>
+          `;
+        });
+
+        cagesHTML += `</div>`;
+      });
+
+      // Calculate Red "CURRENT TIME" Line Position
+      const nowOffsetHours = (now - windowStart) / 3600000;
+      const nowTopPx = nowOffsetHours * dynamicHourHeight;
+      const nowLineHTML = `
+        <div class="now-indicator" style="top: ${nowTopPx}px;">
+          <span class="now-badge">NOW • ${formatTimeShort(now)}</span>
+        </div>
+      `;
+
+      gridBodyEl.innerHTML = timeColHTML + cagesHTML + nowLineHTML;
+    }
+
+    /******************************************************************
+     * 5. TIMERS (1-SECOND CLOCK & 5-MINUTE AUTO-REFRESH)
+     ******************************************************************/
+    function updateClockAndCountdown() {
+      const now = new Date();
+      document.getElementById("liveClock").textContent = now.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+
+      refreshSecondsRemaining--;
+      if (refreshSecondsRemaining <= 0) {
+        refreshSecondsRemaining = config.refreshMinutes * 60;
+        fetchReservations(); // Fetch fresh data & update rolling window
+      } else if (now.getSeconds() === 0) {
+        // Nudge the red "NOW" line every minute even between 5-minute data refreshes
+        renderSchedule();
+      }
+
+      const mins = Math.floor(refreshSecondsRemaining / 60);
+      const secs = String(refreshSecondsRemaining % 60).padStart(2, "0");
+      document.getElementById("refreshCountdown").textContent = `${mins}:${secs}`;
+    }
+
+    /******************************************************************
+     * 6. ON-SCREEN SETTINGS MODAL CONTROLS
+     ******************************************************************/
+    const modal = document.getElementById("settingsModal");
+
+    document.getElementById("openSettingsBtn").addEventListener("click", () => {
+      document.getElementById("inputBefore").value = config.hoursBefore;
+      document.getElementById("inputAfter").value = config.hoursAfter;
+      document.getElementById("inputRefresh").value = config.refreshMinutes;
+      document.getElementById("inputCages").value = config.cages.join(", ");
+      modal.classList.add("active");
+    });
+
+    document.getElementById("closeSettingsBtn").addEventListener("click", () => {
+      modal.classList.remove("active");
+    });
+
+    document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+      const newBefore = Math.max(0, parseInt(document.getElementById("inputBefore").value, 10) || 0);
+      const newAfter = Math.max(1, parseInt(document.getElementById("inputAfter").value, 10) || 1);
+      const newRefresh = Math.max(1, parseInt(document.getElementById("inputRefresh").value, 10) || 5);
+      const newCages = document.getElementById("inputCages").value
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      config.hoursBefore = newBefore;
+      config.hoursAfter = newAfter;
+      config.refreshMinutes = newRefresh;
+      if (newCages.length > 0) config.cages = newCages;
+
+      localStorage.setItem("cageKioskConfig", JSON.stringify(config));
+      refreshSecondsRemaining = config.refreshMinutes * 60;
+      modal.classList.remove("active");
+      fetchReservations();
+    });
+
+    document.getElementById("resetSettingsBtn").addEventListener("click", () => {
+      localStorage.removeItem("cageKioskConfig");
+      window.history.replaceState({}, document.title, window.location.pathname);
+      config = loadConfiguration();
+      refreshSecondsRemaining = config.refreshMinutes * 60;
+      modal.classList.remove("active");
+      fetchReservations();
+    });
+
+    window.addEventListener("resize", renderSchedule);
+
+    // Initialize Kiosk
+    fetchReservations();
+    setInterval(updateClockAndCountdown, 1000);
+  </script>
+</body>
+</html>
